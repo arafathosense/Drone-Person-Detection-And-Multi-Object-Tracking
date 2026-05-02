@@ -1,8 +1,7 @@
-# 🛡️ Aerial Guardian — Drone Person Detection & Multi-Object Tracking
+# 🛡️ Drone Person Detection & Multi-Object Tracking
 
 A lightweight, drone-adapted person detection and multi-object tracking (MOT) pipeline built for the VisDrone dataset. Designed for real-time edge deployment on NVIDIA Jetson Orin Nano 8GB.
 
-> **Note on scope:** The brief's description mentions "vehicles" but the *Target Classes* specification says "Persons." This pipeline follows the Target Classes specification and tracks **persons** (VisDrone classes 1: pedestrian, 2: people). The same pipeline trivially extends to VisDrone's vehicle classes by changing the class filter in `train_visdrone.py` and `evaluate.py`.
 
 ## 🏗️ Architecture
 
@@ -27,91 +26,7 @@ A lightweight, drone-adapted person detection and multi-object tracking (MOT) pi
 
 **Total model size: ~5.4 MB** (YOLO11n) — well under 300 MB limit.
 
-## 📹 Demo Video
-
-Processed output for all 7 VisDrone MOT validation sequences with bounding boxes, persistent IDs, trajectory tails, and FPS HUD.
-
-▶️ **[All output videos (Google Drive)](https://drive.google.com/drive/folders/1K0x_viWgDPyIzLdBedUUuxYI1DKBi0un?usp=sharing)**
-
 **Hero sequence: `uav0000117_02622_v`** (2720×1530, 349 frames, heavy drone pan) — this is the sequence where CMC provides the largest benefit (+7.4% IDF1).
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Python 3.8+
-- CUDA-compatible GPU (tested on GTX 1650 4GB / Jetson Orin Nano 8GB)
-- Conda environment: `llvm-drone` (or any env with PyTorch + CUDA)
-
-### Setup
-
-```bash
-# Clone the repo
-git clone <repo-url>
-cd visdrone_mot
-
-# Activate environment
-conda activate llvm-drone
-
-# Install dependencies (if not already present)
-pip install -r requirements.txt
-
-# Download YOLO11n (automatic on first run)
-# Or manually: wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt
-```
-
-### Download VisDrone Dataset
-
-Download the **VisDrone2019-MOT Validation Set** from:
-- [Google Drive](https://drive.google.com/file/d/1rqnKe9IgU_crMaxRoel9_nuUsMEBBVQu/view?usp=sharing)
-- [VisDrone GitHub](https://github.com/VisDrone/VisDrone-Dataset)
-
-Extract to `data/`:
-```bash
-mkdir -p data
-# Extract the downloaded zip to data/VisDrone2019-MOT-val/
-```
-
-### Run the Pipeline
-
-```bash
-# Process a single sequence
-python run_tracker.py \
-  --input data/VisDrone2019-MOT-val/sequences/uav0000013_00000_v \
-  --output output/result.mp4 \
-  --show
-
-# Process ALL sequences
-python run_tracker.py \
-  --input data/VisDrone2019-MOT-val \
-  --output output/ \
-  --all-sequences
-
-# Run on a video file
-python run_tracker.py --input drone_video.mp4 --output output/tracked.mp4
-
-# Enable SAHI for ultra-small objects at high altitude
-python run_tracker.py --input data/... --sahi --imgsz 640
-
-# Disable CMC (for ablation comparison)
-python run_tracker.py --input data/... --no-cmc
-```
-
-### Fine-tune YOLO11n on VisDrone Pedestrians
-
-```bash
-# Convert VisDrone annotations + fine-tune
-python train_visdrone.py \
-  --data-root data/VisDrone2019-MOT-val \
-  --epochs 50 \
-  --imgsz 1280 \
-  --batch 8
-
-# Use the fine-tuned model
-python run_tracker.py \
-  --model runs/visdrone/visdrone_person/weights/best.pt \
-  --input data/VisDrone2019-MOT-val \
-  --all-sequences
-```
 
 ### Export for Jetson Edge Deployment
 
@@ -126,8 +41,6 @@ python export_tensorrt.py --model best.pt --format engine --imgsz 1280
 python export_tensorrt.py --model best.engine --benchmark --imgsz 1280
 ```
 
----
-
 ## 📋 Summary Report
 
 ### Architecture Choice: YOLO11n + BoT-SORT-style Tracker
@@ -141,7 +54,6 @@ python export_tensorrt.py --model best.engine --benchmark --imgsz 1280
 
 **Model weights:** `models/visdrone_person_best.pt` (5.4 MB, included in repo). To retrain from scratch, see [Fine-tuning](#fine-tune-yolo11n-on-visdrone-pedestrians).
 
----
 
 **Why YOLO11n? (Architecture Deep-Dive)**
 
@@ -174,7 +86,7 @@ ByteTrack's core insight is that **low-confidence detections are not noise — t
                   Final Active Tracks
 ```
 
-1. **Stage 1**: High-confidence detections are greedily matched to track predictions using IoU. Most persons are matched here.
+1. **Stage 1**: High-confidence detections are greedily matched to track predictions using IoU. Most people are matched here.
 2. **Stage 2**: Low-confidence detections (which vanilla trackers discard!) are matched to tracks that were NOT matched in Stage 1. This "rescues" partially occluded or distant persons that produce weaker detection scores.
 3. **Kalman Filter**: Each track maintains a constant-velocity model predicting bounding box position/velocity. Between detections, the Kalman prediction bridges gaps.
 
@@ -331,7 +243,6 @@ Each row adds one component. Evaluated against VisDrone GT (person classes 1+2, 
 | Affine CMC vs Homography | Negligible | Slightly less accurate | More numerically stable for typical drone motion |
 | SAHI (optional) | -70% FPS | +20% recall on tiny | Only needed for extreme altitude; disabled by default |
 
----
 
 ## 📁 Project Structure
 
@@ -354,30 +265,6 @@ visdrone_mot/
 ├── data/                    # VisDrone dataset (download separately)
 ├── models/                  # Fine-tuned model weights
 └── output/                  # Generated output videos + MOT result files
-```
-
-## 🔬 Reproduce Results
-
-```bash
-# 1. Setup
-conda activate llvm-drone
-pip install -r requirements.txt
-
-# 2. Run all sequences with CMC ON + save MOT results
-python run_tracker.py --input data/VisDrone2019-MOT-val --output output/ \
-  --model models/visdrone_person_best.pt --imgsz 1280 --device 0 \
-  --all-sequences --save-mot --mot-dir output/mot_cmc_on
-
-# 3. Run all sequences with CMC OFF (ablation)
-python run_tracker.py --input data/VisDrone2019-MOT-val --output output/ \
-  --model models/visdrone_person_best.pt --imgsz 1280 --device 0 \
-  --all-sequences --save-mot --mot-dir output/mot_cmc_off --no-cmc
-
-# 4. Evaluate
-python evaluate.py --results-dir output/mot_cmc_on/ \
-  --gt-dir data/VisDrone2019-MOT-val/annotations/ --name "CMC ON"
-python evaluate.py --results-dir output/mot_cmc_off/ \
-  --gt-dir data/VisDrone2019-MOT-val/annotations/ --name "CMC OFF"
 ```
 
 ## ⚠️ Limitations & Honest Assessment
@@ -408,4 +295,13 @@ python evaluate.py --results-dir output/mot_cmc_off/ \
 | DS Lab Server | NVIDIA RTX A5000 24GB | Fine-tuning (50 epochs in ~3 min) |
 | **NVIDIA Jetson Orin Nano** | **8GB shared** | **Tested: 14.5 FPS (CMC) / 36.9 FPS (no CMC) TRT FP16 @ 640px** |
 
+## 👤 Author
+
+**HOSEN ARAFAT**  
+
+**Bachelor of Software Engineering, China**  
+
+**GitHub:** https://github.com/arafathosense
+
+**Research Interest: Image Computing and Perceptual Intelligence**
 
